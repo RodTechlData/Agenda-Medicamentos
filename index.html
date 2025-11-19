@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda de Fármacos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Roboto:wght@900&display=swap');
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+        }
+        .main-container { max-width: 1400px; margin: 0 auto; padding: 2rem 1rem; }
+        .card { background: rgba(255, 255, 255, 0.98); border-radius: 2rem; padding: 3rem; margin-bottom: 2.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .time-badge { background: #0284c7; color: white; padding: 0.5rem 1rem; border-radius: 2rem; font-weight: 700; display: inline-block; }
+        .dose-badge { background: #0891b2; color: white; padding: 0.375rem 0.875rem; border-radius: 1.5rem; font-weight: 600; display: inline-block; }
+        .medication-row { transition: all 0.3s; border-left: 6px solid #f59e0b; background: linear-gradient(135deg, #fffbeb, #fef7cd); }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        th { background: #f8fafc; padding: 1.5rem 2rem; text-align: left; font-weight: 700; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 1.75rem 2rem; border-bottom: 1px solid #e2e8f0; }
+        /* Custom modal styles */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center;
+            z-index: 1000; transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            background-color: white; padding: 2rem; border-radius: 1rem; max-width: 600px; width: 90%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); text-align: left; max-height: 90vh; overflow-y: auto;
+        }
+        /* Estilo para el logo de solo texto con fuente Roboto y sombra gruesa */
+        .logo-text {
+            font-family: 'Roboto', sans-serif;
+            text-shadow: 4px 4px 6px rgba(0, 0, 0, 0.4); 
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- HEADER -->
+        <div class="card relative">
+            <!-- LOGO DATAFLOW IA (Extremo Superior Izquierdo) - Aumentamos el padding para separarlo más del centro -->
+            <!-- Usamos absolute top-6 left-6 en lugar de top-8 left-8 para que esté más en la esquina del padding de la card -->
+            <div class="absolute top-6 left-6 flex items-center mb-4 sm:mb-0 z-10"> 
+                <span class="text-3xl font-black text-cyan-800 logo-text">DATAFLOW IA</span>
+            </div>
+
+            <div class="w-full text-center mt-6 sm:mt-0 pt-4"> <!-- Añadimos pt-4 para bajar un poco el contenido central -->
+                <h1 class="text-4xl font-bold text-gray-800 mb-2"><i class="fas fa-prescription-bottle-medical text-blue-600"></i> Agenda de Fármacos</h1>
+                <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
+                    <p id="patientNameDisplay" class="text-gray-700 text-xl font-medium">Paciente: Cargando...</p>
+                    <button onclick="showPatientModal()" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-full hover:bg-indigo-700 text-sm">
+                        <i class="fas fa-user-edit mr-2"></i> Ingresar Paciente
+                    </button>
+                </div>
+                <p id="userIdDisplay" class="text-xs text-gray-400 mt-2">Usuario: Cargando...</p>
+            </div>
+        </div>
+
+        <!-- TABLA DE MEDICAMENTOS -->
+        <div class="card">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4"><i class="fas fa-pills text-blue-600"></i> Medicamentos</h2>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Medicamento</th>
+                            <th>Dosis</th>
+                            <th>Nota</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="medicationsTable">
+                        <!-- Content will be rendered by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="loadingIndicator" class="text-center text-gray-500 mt-4 hidden">Cargando datos...</p>
+        </div>
+
+        <!-- AGREGAR MEDICAMENTO -->
+        <div class="card" style="background: linear-gradient(135deg, #f0fdf4, #e0f2fe); border: 2px solid #60a5fa;">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">➕ Agregar/Modificar Medicamento</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+                <div>
+                    <label class="block font-bold text-gray-700 mb-2">Hora</label>
+                    <input type="time" id="medTime" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-2">Medicamento</label>
+                    <input type="text" id="medName" placeholder="Ej: Aspirina" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-2">Dosis</label>
+                    <input type="text" id="medDose" placeholder="Ej: 500 mg" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-2">Nota</label>
+                    <input type="text" id="medNote" placeholder="Ej: Una vez al día 💊" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="saveMedication()" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700">
+                        💾 Guardar
+                    </button>
+                </div>
+            </div>
+            <button onclick="cancelEdit()" id="cancelBtn" style="display:none;" class="bg-gray-500 text-white font-bold py-2 px-4 rounded">
+                ❌ Cancelar
+            </button>
+        </div>
+
+        <!-- ALIMENTACIÓN E HIDRATACIÓN -->
+        <div class="card">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6"><i class="fas fa-utensils text-amber-600"></i> Alimentación e Hidratación</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- ALIMENTACIÓN -->
+                <div style="padding: 1.5rem; background: linear-gradient(135deg, #fef3c7, #fed7aa); border-radius: 1.5rem; border: 2px solid #fbbf24;">
+                    <h3 class="text-lg font-bold text-amber-900 mb-4">🍎 Alimentación (240 ml/sesión)</h3>
+                    <div id="feedingContainer" class="space-y-3"></div>
+                    <div class="mt-4 text-center">
+                        <button onclick="saveTrackingData()" class="bg-amber-600 text-white font-bold py-2 px-4 rounded hover:bg-amber-700">
+                            Guardar Tracking de Alimentación/Hidratación
+                        </button>
+                    </div>
+                </div>
+
+                <!-- HIDRATACIÓN -->
+                <div style="padding: 1.5rem; background: linear-gradient(135deg, #dbeafe, #bfdbfe); border-radius: 1.5rem; border: 2px solid #60a5fa;">
+                    <h3 class="text-lg font-bold text-blue-900 mb-4">💧 Hidratación (1000 ml/día)</h3>
+                    <div id="hydrationContainer" class="space-y-3"></div>
+                    <div class="mt-4 text-center">
+                        <button onclick="saveTrackingData()" class="bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
+                            Guardar Tracking de Alimentación/Hidratación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-gray-900 text-white mt-10 p-6">
+        <div class="main-container text-center">
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-4 text-sm mb-2">
+                <a href="https://www.dataflowia.com" target="_blank" class="text-cyan-400 hover:text-cyan-200 transition">www.dataflowia.com</a>
+                <span class="text-gray-500 hidden sm:inline">|</span>
+                <a href="mailto:contacto@dataflowia.com" class="text-cyan-400 hover:text-cyan-200 transition">contacto@dataflowia.com</a>
+            </div>
+            <p class="text-gray-500 text-xs">
+                &copy; 2025 Todos los derechos reservados
+            </p>
+        </div>
+    </footer>
+
+    <!-- MODAL PRINCIPAL PARA INGRESO DE PACIENTE Y FÁRMACOS -->
+    <div id="patientModal" class="modal hidden">
+        <div class="modal-content">
+            <h4 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-user-plus text-indigo-600"></i> Ingreso de Paciente y Fármacos</h4>
+            
+            <!-- DATOS DEL PACIENTE -->
+            <div class="mb-6 p-4 border rounded-lg bg-gray-50">
+                <h5 class="text-xl font-semibold mb-3 text-indigo-700">Datos Personales</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Nombre</label>
+                        <input type="text" id="patientName" placeholder="Nombre" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Apellido</label>
+                        <input type="text" id="patientLastName" placeholder="Apellido" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- DATOS DEL FÁRMACO POR DEFECTO (para agregar uno inicial) -->
+            <div class="mb-6 p-4 border rounded-lg bg-red-50">
+                <h5 class="text-xl font-semibold mb-3 text-red-700">Fármaco Inicial (Opcional)</h5>
+                <p class="text-sm text-gray-600 mb-3">Si ya tiene un fármaco fijo, ingréselo aquí. Puede agregar más después en la sección "Agregar Medicamento".</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Fármaco</label>
+                        <input type="text" id="p_medName" placeholder="Ej: Paracetamol" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Dosis/Cantidad</label>
+                        <input type="text" id="p_medDose" placeholder="Ej: 500 mg, 1 pastilla" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Horario (Hora)</label>
+                        <input type="time" id="p_medTime" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+                        <input type="date" id="p_medStartDate" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Fecha de Término (Opcional)</label>
+                        <input type="date" id="p_medEndDate" class="w-full border-2 border-gray-300 rounded px-3 py-2">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closePatientModal()" class="bg-gray-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-600">
+                    Cancelar
+                </button>
+                <button onclick="savePatientAndMedication()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">
+                    💾 Guardar Perfil
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Custom Modal for Alerts/Confirms -->
+    <div id="customModal" class="modal hidden">
+        <div class="modal-content text-center">
+            <h4 id="modalTitle" class="text-xl font-bold text-gray-800 mb-3"></h4>
+            <p id="modalMessage" class="text-gray-600 mb-5"></p>
+            <div id="modalActions">
+                <button id="modalConfirmBtn" class="bg-red-600 text-white px-4 py-2 rounded font-bold mr-2 hidden">Confirmar</button>
+                <button id="modalCloseBtn" class="bg-blue-600 text-white px-4 py-2 rounded font-bold">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Importación de Firebase Modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, deleteDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+
+        // Global Firebase Variables (Provided by environment)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined;
+
+        let db;
+        let auth;
+        let userId = null;
+        
+        // --- DATA STATE ---
+        window.medications = [];
+        window.editingDocId = null; // Store Firestore Document ID for editing/deleting
+        window.patientData = { name: 'Rina Hurtado Neira' }; // Default/Fallback Patient Data
+        
+        // Data for today's tracking (Alimentación e Hidratación)
+        const todayDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        window.g_feedingData = { '8:30': 0, '10:30': 0, '12:30': 0, '14:30': 0, '17:30': 0 };
+        window.g_hydrationData = { '8:30': 0, '10:30': 0, '12:30': 0, '14:30': 0, '17:30': 0 };
+        const times = ['8:30', '10:30', '12:30', '14:30', '17:30'];
+        
+        // --- CUSTOM MODAL IMPLEMENTATION (replacing alert/confirm) ---
+        function showModal(title, message, isConfirm = false) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('customModal');
+                document.getElementById('modalTitle').textContent = title;
+                document.getElementById('modalMessage').textContent = message;
+                const confirmBtn = document.getElementById('modalConfirmBtn');
+                const closeBtn = document.getElementById('modalCloseBtn');
+                
+                confirmBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                    resolve(true);
+                };
+                
+                closeBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                    resolve(false);
+                };
+
+                if (isConfirm) {
+                    confirmBtn.classList.remove('hidden');
+                    confirmBtn.textContent = 'Aceptar';
+                    closeBtn.textContent = 'Cancelar';
+                } else {
+                    confirmBtn.classList.add('hidden');
+                    closeBtn.textContent = 'Cerrar';
+                }
+
+                modal.classList.remove('hidden');
+            });
+        }
+        window.customAlert = (title, message) => showModal(title, message, false);
+        window.customConfirm = (title, message) => showModal(title, message, true);
+
+        // --- PATIENT MODAL LOGIC ---
+        window.showPatientModal = async function() {
+            if (!userId) {
+                await window.customAlert('Cargando...', 'Por favor espere mientras se autentica el usuario.');
+                return;
+            }
+            
+            // Load current patient data into the form fields
+            document.getElementById('patientName').value = window.patientData.name || '';
+            document.getElementById('patientLastName').value = window.patientData.lastName || '';
+
+            // Clean up medication fields for a potential new initial medication entry
+            document.getElementById('p_medName').value = '';
+            document.getElementById('p_medDose').value = '';
+            document.getElementById('p_medTime').value = '';
+            document.getElementById('p_medStartDate').value = '';
+            document.getElementById('p_medEndDate').value = '';
+
+            document.getElementById('patientModal').classList.remove('hidden');
+        }
+
+        window.closePatientModal = function() {
+            document.getElementById('patientModal').classList.add('hidden');
+        }
+        
+        // --- FIREBASE INITIALIZATION AND AUTHENTICATION ---
+        async function initializeFirebase() {
+            setLogLevel('debug');
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.error("Firebase Config is missing. Cannot initialize Firestore.");
+                document.getElementById('loadingIndicator').textContent = "ERROR: Configuración de Firebase faltante.";
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Set session persistence
+                await setPersistence(auth, browserSessionPersistence);
+
+                // Sign in with token or anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Wait for auth state change to get the userId
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('userIdDisplay').textContent = `Usuario (ID): ${userId}`;
+                        // Start loading data after user is confirmed
+                        loadPatientProfile(); // Load patient name first
+                        loadMedications();
+                        loadTrackingData();
+                    } else {
+                        userId = null;
+                        document.getElementById('userIdDisplay').textContent = `Usuario: No autenticado`;
+                        document.getElementById('loadingIndicator').textContent = "Inicia sesión para cargar los datos.";
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                window.customAlert("Error de Inicialización", `No se pudo conectar a Firebase: ${error.message}`);
+            }
+        }
+
+        // --- FIREBASE PATHS ---
+        function getPatientProfileDocRef() {
+            if (!userId) throw new Error("User not authenticated.");
+            // Private data path for patient profile (one document per user)
+            return doc(db, `artifacts/${appId}/users/${userId}/patientProfile`, 'mainProfile');
+        }
+
+        function getMedicationsCollectionRef() {
+            if (!userId) throw new Error("User not authenticated.");
+            // Private data path: /artifacts/{appId}/users/{userId}/{your_collection_name}
+            return collection(db, `artifacts/${appId}/users/${userId}/medications`);
+        }
+
+        function getTrackingDocRef() {
+            if (!userId) throw new Error("User not authenticated.");
+            // Private data path for daily tracking data (one document per day)
+            // Collection: 'tracking', Document ID: today's date (e.g., '2025-11-18')
+            return doc(db, `artifacts/${appId}/users/${userId}/tracking`, todayDate);
+        }
+
+        // --- DATA LOAD (PATIENT PROFILE) ---
+        async function loadPatientProfile() {
+            try {
+                const docRef = getPatientProfileDocRef();
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    window.patientData = docSnap.data();
+                } else {
+                    // Default name if no profile exists
+                    window.patientData = { name: 'Paciente', lastName: 'sin registrar', fullName: 'Paciente sin registrar' };
+                }
+                updatePatientNameDisplay();
+
+            } catch (e) {
+                console.error("Error al cargar perfil de paciente:", e);
+                window.customAlert("Error de Carga", "No se pudo cargar el perfil del paciente.");
+            }
+        }
+
+        // --- DATA LOAD (MEDICATIONS - Realtime Listener) ---
+        function loadMedications() {
+            try {
+                const q = query(getMedicationsCollectionRef());
+                
+                // Real-time listener
+                onSnapshot(q, (snapshot) => {
+                    document.getElementById('loadingIndicator').classList.add('hidden');
+                    window.medications = [];
+                    snapshot.forEach((doc) => {
+                        // Store the document ID along with the data
+                        window.medications.push({ id: doc.id, ...doc.data() });
+                    });
+                    
+                    // Sort the medications by time (client-side)
+                    window.medications.sort((a, b) => a.time.localeCompare(b.time));
+                    
+                    renderMedications();
+                }, (error) => {
+                    console.error("Error al escuchar medicamentos:", error);
+                    window.customAlert("Error de Carga", "No se pudo cargar la lista de medicamentos en tiempo real.");
+                });
+            } catch (e) {
+                console.error(e);
+                document.getElementById('loadingIndicator').textContent = "ERROR: No se pueden cargar los datos sin usuario autenticado.";
+            }
+        }
+
+        // --- DATA LOAD (TRACKING - One-time load) ---
+        async function loadTrackingData() {
+            try {
+                const docRef = getTrackingDocRef();
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // Deserialize JSON strings back to objects
+                    window.g_feedingData = data.feedingData ? JSON.parse(data.feedingData) : window.g_feedingData;
+                    window.g_hydrationData = data.hydrationData ? JSON.parse(data.hydrationData) : window.g_hydrationData;
+                }
+                renderFeeding();
+                renderHydration();
+
+            } catch (e) {
+                console.error("Error al cargar datos de tracking:", e);
+                window.customAlert("Error de Carga", "No se pudo cargar el tracking de alimentación/hidratación.");
+            }
+        }
+        
+        // --- DATA SAVE (PATIENT & INITIAL MEDICATION) ---
+        window.savePatientAndMedication = async function() {
+            const name = document.getElementById('patientName').value.trim();
+            const lastName = document.getElementById('patientLastName').value.trim();
+            const fullName = `${name} ${lastName}`.trim();
+
+            const medName = document.getElementById('p_medName').value.trim();
+            const medDose = document.getElementById('p_medDose').value.trim();
+            const medTime = document.getElementById('p_medTime').value.trim();
+            const medStartDate = document.getElementById('p_medStartDate').value.trim();
+            const medEndDate = document.getElementById('p_medEndDate').value.trim();
+
+            if (!name || !lastName) {
+                await window.customAlert('⚠️ Atención', 'Por favor ingresa el Nombre y Apellido del paciente.');
+                return;
+            }
+
+            try {
+                // 1. Save Patient Profile
+                const profileData = { name: name, lastName: lastName, fullName: fullName };
+                await setDoc(getPatientProfileDocRef(), profileData);
+                window.patientData = profileData;
+                updatePatientNameDisplay();
+                
+                let successMessage = `Perfil de paciente "${fullName}" guardado correctamente.`;
+
+                // 2. Save Initial Medication (if data is provided)
+                if (medName && medDose) {
+                    const medData = { 
+                        time: medTime || '23:59', // SOS if no time
+                        name: medName, 
+                        dose: medDose, 
+                        note: `Inicio: ${medStartDate || 'N/A'}${medEndDate ? ', Término: ' + medEndDate : ''}`,
+                        startDate: medStartDate || null,
+                        endDate: medEndDate || null
+                    };
+                    // Use setDoc without ID to let Firestore generate the ID for a new document
+                    await setDoc(doc(getMedicationsCollectionRef()), medData);
+                    successMessage += ` El fármaco "${medName}" ha sido añadido.`;
+                }
+                
+                window.customAlert('✅ Éxito', successMessage);
+                closePatientModal();
+
+            } catch (e) {
+                console.error("Error saving patient profile/medication:", e);
+                window.customAlert("Error de Guardado", `No se pudo guardar el perfil/fármaco: ${e.message}`);
+            }
+        }
+
+
+        // --- DATA SAVE (MEDICATIONS - from main form) ---
+        async function saveMedicationToDB(medData, docId = null) {
+            try {
+                const medRef = docId ? doc(getMedicationsCollectionRef(), docId) : doc(getMedicationsCollectionRef());
+
+                // If editing, merge the new data, otherwise, it creates a new document.
+                await setDoc(medRef, medData, { merge: true });
+
+                const action = docId ? "modificado" : "agregado";
+                window.customAlert('✅ Éxito', `${medData.name} ${action} correctamente.`);
+            } catch (e) {
+                console.error("Error saving medication:", e);
+                window.customAlert("Error de Guardado", `No se pudo guardar el medicamento: ${e.message}`);
+            }
+        }
+
+        // --- DATA SAVE (TRACKING) ---
+        window.saveTrackingData = async function() {
+            try {
+                const docRef = getTrackingDocRef();
+                const trackingData = {
+                    date: todayDate,
+                    // Serialize complex objects to JSON strings
+                    feedingData: JSON.stringify(window.g_feedingData),
+                    hydrationData: JSON.stringify(window.g_hydrationData),
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                await setDoc(docRef, trackingData, { merge: true });
+                window.customAlert('✅ Éxito', `Tracking de hoy (${todayDate}) guardado en la base de datos.`);
+            } catch (e) {
+                console.error("Error saving tracking data:", e);
+                window.customAlert("Error de Guardado", `No se pudo guardar el tracking: ${e.message}`);
+            }
+        }
+        
+        // --- DATA DELETE (MEDICATIONS) ---
+        window.deleteMedicationFromDB = async function(docId, medName) {
+            const confirmed = await window.customConfirm(`¿Eliminar "${medName}"?`, `¿Estás seguro de que quieres eliminar el medicamento "${medName}"?`);
+            if (!confirmed) return;
+            
+            try {
+                await deleteDoc(doc(getMedicationsCollectionRef(), docId));
+                window.customAlert('🗑️ Eliminado', `${medName} eliminado correctamente.`);
+                // The onSnapshot listener handles the UI update automatically
+                cancelEdit();
+            } catch (e) {
+                console.error("Error deleting medication:", e);
+                window.customAlert("Error de Eliminación", `No se pudo eliminar el medicamento: ${e.message}`);
+            }
+        }
+
+        // --- UI LOGIC ---
+        function updatePatientNameDisplay() {
+            const fullName = window.patientData.fullName || `${window.patientData.name || 'Paciente'} ${window.patientData.lastName || 'sin registrar'}`.trim();
+            document.getElementById('patientNameDisplay').textContent = `Paciente: ${fullName}`;
+        }
+
+        // Renderizar tabla de medicamentos
+        window.renderMedications = function() {
+            const tbody = document.getElementById('medicationsTable');
+            tbody.innerHTML = '';
+            
+            if (window.medications.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-6">No hay medicamentos registrados.</td></tr>';
+                return;
+            }
+
+            window.medications.forEach((med, index) => {
+                const timeText = med.time === '23:59' ? 'SOS' : med.time;
+                const timeBg = med.time === '23:59' ? '#dc2626' : '#0284c7';
+                const rowBg = med.time === '23:59' ? 'linear-gradient(135deg, #fef2f2, #fee2e2)' : 'linear-gradient(135deg, #fffbeb, #fef7cd)';
+                const rowBorder = med.time === '23:59' ? '#dc2626' : '#f59e0b';
+
+                const row = `
+                    <tr class="medication-row" style="background: ${rowBg}; border-left-color: ${rowBorder};">
+                        <td><span class="time-badge" style="background: ${timeBg};">${timeText}</span></td>
+                        <td><strong>${med.name}</strong></td>
+                        <td><span class="dose-badge" style="background: ${timeBg};">${med.dose}</span></td>
+                        <td>${med.note}</td>
+                        <td>
+                            <button onclick="editMedication('${med.id}')" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2 hover:bg-blue-600">✏️ Editar</button>
+                            <button onclick="deleteMedicationFromDB('${med.id}', '${med.name}')" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">🗑️ Eliminar</button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Agregar o modificar medicamento (handles UI input)
+        window.saveMedication = function() {
+            const time = document.getElementById('medTime').value || '23:59'; // Use 23:59 for SOS/no time set
+            const name = document.getElementById('medName').value.trim();
+            const dose = document.getElementById('medDose').value.trim();
+            const note = document.getElementById('medNote').value.trim();
+
+            if (!name || !dose) {
+                window.customAlert('⚠️ Atención', 'Por favor completa: Medicamento y Dosis');
+                return;
+            }
+
+            const medData = { time, name, dose, note };
+
+            // Pass the docId if editing, null if adding new
+            saveMedicationToDB(medData, window.editingDocId);
+            limpiarFormulario();
+            cancelEdit();
+        }
+
+        // Editar medicamento (handles UI pre-fill)
+        window.editMedication = function(docId) {
+            const med = window.medications.find(m => m.id === docId);
+            if (!med) return;
+            
+            window.editingDocId = docId;
+            document.getElementById('medTime').value = med.time === '23:59' ? '' : med.time;
+            document.getElementById('medName').value = med.name;
+            document.getElementById('medDose').value = med.dose;
+            document.getElementById('medNote').value = med.note;
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+            document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Cancelar edición
+        window.cancelEdit = function() {
+            window.editingDocId = null;
+            limpiarFormulario();
+            document.getElementById('cancelBtn').style.display = 'none';
+        }
+
+        // Limpiar formulario
+        function limpiarFormulario() {
+            document.getElementById('medTime').value = '';
+            document.getElementById('medName').value = '';
+            document.getElementById('medDose').value = '';
+            document.getElementById('medNote').value = '';
+        }
+
+        // Función para renderizar alimentación
+        window.renderFeeding = function() {
+            const container = document.getElementById('feedingContainer');
+            container.innerHTML = '';
+            times.forEach(time => {
+                const current = window.g_feedingData[time] || 0;
+                const percent = Math.min((current / 240) * 100, 100);
+                const html = `
+                    <div style="padding: 1rem; background: white; border-radius: 0.75rem; border-left: 4px solid #b45309;">
+                        <div class="font-bold text-amber-900 mb-2">🕐 ${time} hrs</div>
+                        <div class="mb-2">
+                            <div class="text-sm font-semibold text-gray-700 mb-1">${current} / 240 ml</div>
+                            <div style="width: 100%; height: 14px; background: #e5e7eb; border-radius: 10px; overflow: hidden;">
+                                <div style="width: ${percent}%; height: 100%; background: #b45309; transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="addFeeding('${time}', 60)" class="bg-amber-400 text-amber-900 font-bold py-1 px-2 rounded text-sm hover:bg-amber-500">+60</button>
+                            <button onclick="addFeeding('${time}', 120)" class="bg-amber-500 text-white font-bold py-1 px-2 rounded text-sm hover:bg-amber-600">+120</button>
+                            <button onclick="clearFeeding('${time}')" class="bg-red-600 text-white font-bold py-1 px-2 rounded text-sm hover:bg-red-700">Limpiar</button>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+
+        // Función para renderizar hidratación
+        window.renderHydration = function() {
+            const container = document.getElementById('hydrationContainer');
+            container.innerHTML = '';
+            times.forEach(time => {
+                const current = window.g_hydrationData[time] || 0;
+                const percent = Math.min((current / 1000) * 100, 100);
+                const html = `
+                    <div style="padding: 1rem; background: white; border-radius: 0.75rem; border-left: 4px solid #3b82f6;">
+                        <div class="font-bold text-blue-900 mb-2">💧 ${time} hrs</div>
+                        <div class="mb-2">
+                            <div class="text-sm font-semibold text-gray-700 mb-1">${current} / 1000 ml</div>
+                            <div style="width: 100%; height: 14px; background: #e5e7eb; border-radius: 10px; overflow: hidden;">
+                                <div style="width: ${percent}%; height: 100%; background: #3b82f6; transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="addHydration('${time}', 30)" class="bg-blue-300 text-blue-900 font-bold py-1 px-2 rounded text-sm hover:bg-blue-400">+30</button>
+                            <button onclick="addHydration('${time}', 60)" class="bg-blue-500 text-white font-bold py-1 px-2 rounded text-sm hover:bg-blue-600">+60</button>
+                            <button onclick="clearHydration('${time}')" class="bg-blue-900 text-white font-bold py-1 px-2 rounded text-sm hover:bg-blue-950">Limpiar</button>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+
+        // Funciones de control de tracking (alimentación)
+        window.addFeeding = function(time, amount) {
+            window.g_feedingData[time] = Math.min((window.g_feedingData[time] || 0) + amount, 240);
+            renderFeeding();
+        }
+
+        window.clearFeeding = function(time) {
+            window.g_feedingData[time] = 0;
+            renderFeeding();
+        }
+
+        // Funciones de control de tracking (hidratación)
+        window.addHydration = function(time, amount) {
+            window.g_hydrationData[time] = Math.min((window.g_hydrationData[time] || 0) + amount, 1000);
+            renderHydration();
+        }
+
+        window.clearHydration = function(time) {
+            window.g_hydrationData[time] = 0;
+            renderHydration();
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', initializeFirebase);
+    </script>
+</body>
+</html>
